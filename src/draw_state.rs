@@ -1,6 +1,4 @@
-use crate::na;
-
 pub struct DrawState {
-    pub outline: na::Vector4,
+    pub contacts: u32,
     pub hollow: bool,
 }

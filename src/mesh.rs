@@ -129,6 +129,7 @@ impl Mesh4 {
                     self.colors[self.indices[i + 3] as usize],
                 ]),
             })
+            .flat_map(|x| itertools::repeat_n(x, 7))
             .collect()
     }
 }

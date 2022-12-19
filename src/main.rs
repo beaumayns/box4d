@@ -23,81 +23,24 @@ use winit::{
     window::WindowBuilder,
 };
 
-fn main() {
-    let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
-    let mut cursor_mode = winit::window::CursorGrabMode::Locked;
-    window.set_cursor_grab(cursor_mode).unwrap();
+use crate::ga::Wedge;
 
+async fn run(
+    event_loop: EventLoop<()>,
+    window: winit::window::Window,
+    mut world: hecs::World,
+    player_entity: hecs::Entity,
+) {
     let mut renderer = renderer::Renderer::new(&window);
-    let mut world = hecs::World::new();
     let mut constraints = constraints::Constraints::new();
     let mut input_state = input::InputState::default();
 
-    let player_entity = world.spawn((
-        actor::Actor {
-            move_thrust: 3000.0,
-            look_torque: 500.0,
-            grab_state: actor::GrabState::Not,
-        },
-        mesh_renderer::Camera {
-            aspect: window.inner_size().width as f32 / window.inner_size().height as f32,
-            fovy: 1.0,
-            znear: 0.1,
-            zfar: 100.0,
-        },
-        sprite_renderer::Sprite {
-            image: "assets/images/crosshair.png".into(),
-            scale: na::vec2(1.0, 1.0),
-            position: na::Vector2::zeros(),
-            tint: na::vec4(0.0, 0.0, 0.0, 1.0),
-        },
-        physics::RigidBody {
-            position: na::vec4(0.0, 0.0, -4.0, 0.0),
-            linear_damping: 0.9,
-            angular_damping: 0.9,
-            gravity: 0.0,
-            ..Default::default()
-        }
-        .with_mass(100.0),
-    ));
-    {
-        let floor_mesh = mesh::Mesh4::cube().transformed(&na::Affine4::from_pos(
-            na::Vector4::zeros(),
-            na::Matrix4::identity(),
-            na::vec4(10.0, 10.0, 10.0, 10.0),
-        ));
-        world.spawn((
-            physics::RigidBody {
-                position: na::vec4(0.0, -7.0, 0.0, 0.0),
-                gravity: 0.0,
-                ..Default::default()
-            }
-            .with_mass(f32::INFINITY),
-            collision::Collider::from_mesh4(&floor_mesh),
-            floor_mesh,
-            draw_state::DrawState {
-                outline: na::Vector4::zeros(),
-                hollow: false,
-            },
-        ));
-    }
-    world.spawn((
-        physics::RigidBody {
-            position: na::vec4(0.0, 0.0, 0.0, 0.0),
-            ..Default::default()
-        },
-        mesh::Mesh4::cube(),
-        collision::Collider::from_mesh4(&mesh::Mesh4::cube()),
-        draw_state::DrawState {
-            outline: na::Vector4::zeros(),
-            hollow: false,
-        },
-    ));
+    let mut cursor_mode = winit::window::CursorGrabMode::None;
+    window.set_cursor_grab(cursor_mode).unwrap();
 
     let dt: f32 = 1.0 / 120.0;
     let mut remaining: f32 = 0.0;
-    let mut last_frame_time = std::time::Instant::now();
+    let mut last_frame_time = instant::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -141,6 +84,9 @@ fn main() {
                         _ => {}
                     }
                 }
+                WindowEvent::MouseInput { button, state, .. } => {
+                    input_state.mouse_click(*button, *state == ElementState::Pressed);
+                }
                 _ => {}
             },
             Event::DeviceEvent {
@@ -151,17 +97,11 @@ fn main() {
                     input_state.mouse_moved(x, y);
                 }
             }
-            Event::DeviceEvent {
-                event: DeviceEvent::Button { button, state },
-                ..
-            } => {
-                input_state.mouse_click(button, state == ElementState::Pressed);
-            }
             Event::RedrawRequested(_) => {
                 // Constant-time physics updates - accumulate the elapsed time
                 // since previous frame, and spend it in fixed chunks doing physics
                 // updates
-                let frame_start_time = std::time::Instant::now();
+                let frame_start_time = instant::Instant::now();
                 let elapsed = frame_start_time - last_frame_time;
                 last_frame_time = frame_start_time;
                 remaining += (elapsed.as_nanos() as f64 / 1e9) as f32;
@@ -189,4 +129,116 @@ fn main() {
             _ => {}
         }
     });
+}
+
+fn build_world() -> (hecs::Entity, hecs::World) {
+    let mut world = hecs::World::new();
+
+    let player_entity = world.spawn((
+        actor::Actor {
+            move_thrust: 3000.0,
+            look_torque: 500.0,
+            grab_state: actor::GrabState::Not,
+        },
+        mesh_renderer::Camera {
+            fovy: 1.0,
+            znear: 0.1,
+            zfar: 100.0,
+        },
+        sprite_renderer::Sprite {
+            scale: na::vec2(1.0, 1.0),
+            position: na::Vector2::zeros(),
+            tint: na::vec4(0.0, 0.0, 0.0, 1.0),
+        },
+        physics::RigidBody {
+            position: na::vec4(0.0, 0.0, -4.0, 0.0),
+            linear_damping: 0.9,
+            angular_damping: 0.9,
+            gravity: 0.0,
+            ..Default::default()
+        }
+        .with_mass(100.0),
+    ));
+    {
+        let floor_mesh = mesh::Mesh4::cube().transformed(&na::Affine4::from_pos(
+            na::Vector4::zeros(),
+            na::Matrix4::identity(),
+            na::vec4(10.0, 10.0, 10.0, 10.0),
+        ));
+        world.spawn((
+            physics::RigidBody {
+                position: na::vec4(0.0, -7.0, 0.0, 0.0),
+                gravity: 0.0,
+                ..Default::default()
+            }
+            .with_mass(f32::INFINITY),
+            collision::Collider::from_mesh4(&floor_mesh),
+            floor_mesh,
+            draw_state::DrawState {
+                contacts: 0,
+                hollow: false,
+            },
+        ));
+    }
+    world.spawn((
+        physics::RigidBody {
+            position: na::vec4(0.0, 0.0, 0.0, 0.0),
+            ..Default::default()
+        },
+        mesh::Mesh4::cube(),
+        collision::Collider::from_mesh4(&mesh::Mesh4::cube()),
+        draw_state::DrawState {
+            contacts: 0,
+            hollow: false,
+        },
+    ));
+    world.spawn((
+        physics::RigidBody {
+            position: na::vec4(0.0, 1.1, 0.0, 0.0),
+            angular_velocity: na::vec4(0.7, 0.0, 0.0, 0.7).wedge(na::vec4(0.0, 0.0, 0.7, 0.0))
+                + na::vec4(0.7, 0.7, 0.0, 0.0).wedge(na::vec4(0.0, 0.0, 0.0, 0.5)),
+            gravity: 0.0,
+            ..Default::default()
+        },
+        mesh::Mesh4::cube(),
+        collision::Collider::from_mesh4(&mesh::Mesh4::cube()),
+        draw_state::DrawState {
+            contacts: 0,
+            hollow: false,
+        },
+    ));
+    (player_entity, world)
+}
+
+fn main() {
+    let event_loop = EventLoop::new();
+    let (player_entity, world) = build_world();
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        env_logger::init();
+        let window = WindowBuilder::new().build(&event_loop).unwrap();
+        pollster::block_on(run(event_loop, window, world, player_entity));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+        use winit::platform::web::WindowBuilderExtWebSys;
+
+        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+        console_log::init().expect("could not initialize logger");
+
+        let canvas = web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| doc.get_element_by_id("canvas"))
+            .map(|el| el.unchecked_into::<web_sys::HtmlCanvasElement>())
+            .expect("Canvas not found");
+        let window = WindowBuilder::new()
+            .with_canvas(Some(canvas))
+            .build(&event_loop)
+            .unwrap();
+
+        wasm_bindgen_futures::spawn_local(run(event_loop, window, world, player_entity));
+    }
 }

@@ -6,10 +6,27 @@ edition = "2021"
 [dependencies]
 winit = "0.27"
 futures = "0.3"
-wgpu = { version = "0.13", features = [ "glsl" ] }
-naga = "0.9"
+wgpu = { version = "0.14", features = [ "glsl", "webgl" ] }
+naga = "0.10"
 bytemuck = { version = "1.12", features = [ "derive" ] }
 nalgebra = { version = "0.31", features = [ "bytemuck" ] }
 itertools = "0.10"
 image = "0.24"
 hecs = "0.9"
+log = "0.4"
+instant = "0.1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+console_error_panic_hook = "0.1"
+console_log = "0.1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+pollster = "0.2"
+env_logger = "0.10"
+
+[profile.release]
+lto = true
+opt-level = 's'

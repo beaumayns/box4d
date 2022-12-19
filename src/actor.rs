@@ -113,6 +113,7 @@ fn update_movement(
         false => (forward.wedge(right), up.wedge(forward), right.wedge(up)),
         true => (forward.wedge(ana), up.wedge(ana), right.wedge(ana)),
     };
+
     body.torque += actor.look_torque * input_state.yaw * yaw_plane;
     body.torque += actor.look_torque * input_state.pitch * pitch_plane;
     if input_state.roll_left {

@@ -29,6 +29,19 @@ impl Renderer {
             }))
             .expect("failed to get adaptor");
 
+        #[cfg(target_arch = "wasm32")]
+        let (device, queue) = futures::executor::block_on(adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                label: None,
+                features: wgpu::Features::empty(),
+                limits:
+                    wgpu::Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits()),
+            },
+            None,
+        ))
+        .expect("failed to get device");
+
+        #[cfg(not(target_arch = "wasm32"))]
         let (device, queue) = futures::executor::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
@@ -45,6 +58,7 @@ impl Renderer {
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
         };
         surface.configure(&device, &surface_config);
 
@@ -86,8 +100,13 @@ impl Renderer {
     }
 
     pub fn update_buffers(&mut self, world: &mut hecs::World, camera_entity: hecs::Entity) {
-        self.mesh_renderer
-            .update_buffers(&self.device, &self.queue, world, camera_entity);
+        self.mesh_renderer.update_buffers(
+            &self.device,
+            &self.queue,
+            world,
+            camera_entity,
+            self.surface_config.width as f32 / self.surface_config.height as f32,
+        );
         self.sprite_renderer
             .update_buffers(&self.device, &self.queue, self.size, world);
     }

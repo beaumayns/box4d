@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Box 4D</title>
+    <style type="text/css">
+        body { margin: 0px; }
+    </style>
+</head>
+
+<body>
+    <script type="module">
+        import init from "./box4d.js";
+        window.addEventListener("load", () => {
+          init();
+        });
+    </script>
+    <div id="outer" style="display:flex">
+        <div id="display" style="float:left;margin:5px">
+            <canvas id="canvas"></canvas>
+        </div>
+        <div id="info" style="float:right">
+            <h2> 10 DOF Movement </h2>
+            W/A/S/D - forward/left/back/right </br>
+            Space/C - up/down </br>
+            Q/E - roll left/right </br>
+            R/F - ana/kata </br>
+            Hold Shift - shift yaw/pitch/roll from xz/yz/xy to zw/yw/xw </br>
+            Click - grab </br>
+            Tab - lock/unlock mouse</br>
+            <a href="https://github.com/beaumayns/box4d">source</a></br>
+        </div>
+    </div>
+</body>
+
+</html>
