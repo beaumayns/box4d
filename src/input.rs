@@ -1,4 +1,4 @@
-use winit::event::{ButtonId, VirtualKeyCode};
+use winit::event::VirtualKeyCode;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct InputState {
@@ -53,8 +53,8 @@ impl InputState {
         self.pitch = y as f32;
     }
 
-    pub fn mouse_click(&mut self, button: ButtonId, pressed: bool) {
-        if button == 0 {
+    pub fn mouse_click(&mut self, button: winit::event::MouseButton, pressed: bool) {
+        if button == winit::event::MouseButton::Left {
             self.grab = pressed;
         }
     }

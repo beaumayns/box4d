@@ -10,7 +10,6 @@ use itertools::Itertools;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Camera {
-    pub aspect: f32,
     pub fovy: f32,
     pub znear: f32,
     pub zfar: f32,
@@ -31,12 +30,12 @@ fn view_from_orientation(orientation: na::Matrix4) -> na::Matrix4 {
 }
 
 impl CameraUniforms {
-    fn from_components(camera: &Camera, body: &physics::RigidBody) -> Self {
+    fn from_components(camera: &Camera, aspect: f32, body: &physics::RigidBody) -> Self {
         CameraUniforms {
             view: view_from_orientation(body.orientation.to_matrix()),
             position: body.position,
             projection: na::Matrix4::new_perspective(
-                camera.aspect,
+                aspect,
                 camera.fovy,
                 camera.znear,
                 camera.zfar,
@@ -47,7 +46,7 @@ impl CameraUniforms {
 
 pub struct MeshBuffers {
     num_vertices: u32,
-    _tetrahedra_buffer: wgpu::Buffer,
+    tetrahedra_buffer: wgpu::Buffer,
     transform_buffer: wgpu::Buffer,
     draw_state_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
@@ -72,17 +71,17 @@ impl TransformUniforms {
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct DrawStateUniforms {
-    pub outline: na::Vector4,
+    pub contacts: u32,
     pub hollow: u32,
-    pub padding: [u32; 3],
+    pub padding: [u32; 2],
 }
 
 impl DrawStateUniforms {
     fn from_draw_state(state: &draw_state::DrawState) -> Self {
         Self {
-            outline: state.outline,
+            contacts: state.contacts,
             hollow: state.hollow as u32,
-            padding: [0, 0, 0],
+            padding: [0, 0],
         }
     }
 }
@@ -238,16 +237,6 @@ impl MeshRenderer {
                         binding: 0,
                         visibility: wgpu::ShaderStages::VERTEX,
                         ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: None,
@@ -255,7 +244,7 @@ impl MeshRenderer {
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
-                        binding: 2,
+                        binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
@@ -285,6 +274,72 @@ impl MeshRenderer {
                 &camera_uniforms_bind_group_layout,
                 &mesh_bind_group_layout,
             ],
+            &[wgpu::VertexBufferLayout {
+                array_stride: 192,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &[
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 16,
+                        shader_location: 1,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 32,
+                        shader_location: 2,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 48,
+                        shader_location: 3,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 64,
+                        shader_location: 4,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 80,
+                        shader_location: 5,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 96,
+                        shader_location: 6,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 112,
+                        shader_location: 7,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 128,
+                        shader_location: 8,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 144,
+                        shader_location: 9,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 160,
+                        shader_location: 10,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 176,
+                        shader_location: 11,
+                    },
+                ],
+            }],
         );
 
         let mixtable_uniform_buffer =
@@ -330,6 +385,7 @@ impl MeshRenderer {
         queue: &wgpu::Queue,
         world: &mut hecs::World,
         camera_entity: hecs::Entity,
+        aspect: f32,
     ) {
         if let Ok((camera, body)) =
             world.query_one_mut::<(&Camera, &physics::RigidBody)>(camera_entity)
@@ -337,7 +393,7 @@ impl MeshRenderer {
             queue.write_buffer(
                 &self.camera_uniforms_buffer,
                 0,
-                bytemuck::bytes_of(&CameraUniforms::from_components(camera, body)),
+                bytemuck::bytes_of(&CameraUniforms::from_components(camera, aspect, body)),
             );
         }
 
@@ -362,7 +418,7 @@ impl MeshRenderer {
                     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: None,
                         contents: bytemuck::cast_slice(mesh.get_buffer_data().as_slice()),
-                        usage: wgpu::BufferUsages::STORAGE,
+                        usage: wgpu::BufferUsages::VERTEX,
                     });
 
                 let transform_buffer =
@@ -386,14 +442,10 @@ impl MeshRenderer {
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: tetrahedra_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
                             resource: transform_buffer.as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
-                            binding: 2,
+                            binding: 1,
                             resource: draw_state_buffer.as_entire_binding(),
                         },
                     ],
@@ -404,7 +456,7 @@ impl MeshRenderer {
                     entity,
                     MeshBuffers {
                         num_vertices: (mesh.num_tetrahedra * 7) as u32,
-                        _tetrahedra_buffer: tetrahedra_buffer,
+                        tetrahedra_buffer,
                         transform_buffer,
                         draw_state_buffer,
                         bind_group,
@@ -434,7 +486,7 @@ impl MeshRenderer {
         let mut mesh_buffers_query = world.query::<&MeshBuffers>();
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
+            label: Some("Mesh Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
@@ -464,6 +516,7 @@ impl MeshRenderer {
 
         for (_, mesh_buffers) in mesh_buffers_query.iter() {
             render_pass.set_bind_group(2, &mesh_buffers.bind_group, &[]);
+            render_pass.set_vertex_buffer(0, mesh_buffers.tetrahedra_buffer.slice(..));
             render_pass.draw(0..mesh_buffers.num_vertices, 0..1);
         }
     }

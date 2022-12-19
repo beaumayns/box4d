@@ -20,6 +20,7 @@ pub fn create_pipeline(
     vs: &str,
     fs: &str,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
+    buffers: &[wgpu::VertexBufferLayout],
 ) -> wgpu::RenderPipeline {
     let vs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
@@ -50,7 +51,7 @@ pub fn create_pipeline(
         vertex: wgpu::VertexState {
             module: &vs_module,
             entry_point: "main",
-            buffers: &[],
+            buffers,
         },
         fragment: Some(wgpu::FragmentState {
             module: &fs_module,
@@ -58,7 +59,7 @@ pub fn create_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format: surface_config.format,
                 blend: Some(wgpu::BlendState {
-                    alpha: wgpu::BlendComponent::REPLACE,
+                    alpha: wgpu::BlendComponent::OVER,
                     color: wgpu::BlendComponent {
                         src_factor: wgpu::BlendFactor::SrcAlpha,
                         dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,

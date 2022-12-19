@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Boxing in 4d</title>
+    <style type="text/css">
+        body { margin: 0px; }
+    </style>
+</head>
+
+<body>
+    <script type="module">
+        import init from "./boxing_in_4d.js";
+        window.addEventListener("load", () => {
+          init();
+        });
+    </script>
+    <a href="https://github.com/beaumayns/boxing_in_4d">source</a></br>
+    <canvas id="canvas"></canvas>
+    <h2> 10 DOF Movement </h2>
+    W/A/S/D - forward/left/back/right </br>
+    Space/C - up/down </br>
+    Q/E - tilt left/right </br>
+    R/F - ana/kata </br>
+    Hold Shift - shift yaw/pitch/roll from xz/yz/xy to zw/yw/xw </br>
+    Click - grab </br>
+    Tab - lock/unlock mouse</br>
+    </div>
+</body>
+
+</html>

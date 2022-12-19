@@ -11,9 +11,10 @@ layout(std140, set = 1, binding = 0) uniform CameraUniform {
     Camera camera;
 };
 
-layout(std140, set = 2, binding = 2) uniform State {
-    vec4 outline;
+layout(std140, set = 2, binding = 1) uniform State {
+    uint contacts;
     uint hollow;
+    uvec2 padding;
 };
 
 const vec4 light_position = vec4(2, 2, 0, 0);
@@ -45,12 +46,13 @@ void main() {
     final_color = vec4(pow((ambient + diffuse + specular) * color.xyz, vec3(2.2)), color.w);
 
     vec3 a3 = step(2.0 * fwidth(barycentric), barycentric);
-    if(outline.w != 0.0 || hollow != 0) {
+    if(contacts > 0 || hollow != 0) {
         float m = min(min(a3.x, a3.y), a3.z);
         if(m > 0.0 && hollow != 0) {
             discard;
         }
 
-        final_color = vec4(mix(mix(vec3(0), outline.xyz, outline.w), final_color.xyz, m), final_color.w);
+        vec3 outlineColor = vec3(0.0, contacts > 0 ? 1.0 : 0.0, 0.0);
+        final_color = vec4(mix(mix(vec3(0), outlineColor, 1.0), final_color.xyz, m), final_color.w);
     }
 }

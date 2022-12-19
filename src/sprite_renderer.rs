@@ -7,7 +7,6 @@ use wgpu::util::DeviceExt;
 use crate::na::{vec2, vec4};
 
 pub struct Sprite {
-    pub image: std::path::PathBuf,
     pub scale: na::Vector2,
     pub position: na::Vector2,
     pub tint: na::Vector4,
@@ -81,6 +80,7 @@ impl SpriteRenderer {
                 "/assets/shaders/sprite.frag"
             )),
             &[&bind_group_layout],
+            &[],
         );
 
         Self {
@@ -115,7 +115,11 @@ impl SpriteRenderer {
                     }),
                 );
             } else {
-                let image = image::open("assets/images/crosshair.png").unwrap();
+                let image_bytes = include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/assets/images/crosshair.png"
+                ));
+                let image = image::load_from_memory(image_bytes).unwrap();
                 let image_rgba = image.as_rgba8().unwrap();
                 let texture = texture::Texture::from_image(device, queue, image_rgba);
 
