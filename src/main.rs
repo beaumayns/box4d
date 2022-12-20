@@ -14,7 +14,7 @@ use winit::{
 
 use crate::ga::Wedge;
 
-use crate::na::vec4;
+use crate::na::{vec2, vec4};
 
 use wgpu::util::DeviceExt;
 
@@ -57,6 +57,14 @@ struct TransformUniforms {
     translation: na::Vector4,
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct SpriteUniforms {
+    scale: na::Vector2,
+    position: na::Vector2,
+    tint: na::Vector4,
+}
+
 struct State {
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface,
@@ -64,7 +72,12 @@ struct State {
     queue: wgpu::Queue,
     surface_config: wgpu::SurfaceConfiguration,
     depth_texture: texture::Texture,
-    render_pipeline: wgpu::RenderPipeline,
+
+    crosshair_sprite_texture_bind_group: wgpu::BindGroup,
+    _crosshair_texture: texture::Texture,
+    crosshair_sprite_uniforms_bind_group: wgpu::BindGroup,
+    _crosshair_sprite_uniforms_buffer: wgpu::Buffer,
+    render_pipeline_sprite: wgpu::RenderPipeline,
 
     mesh: mesh::Mesh4,
     mesh_body: rigidbody::RigidBody,
@@ -79,6 +92,8 @@ struct State {
     _tetrahedra_buffer: wgpu::Buffer,
     transform_buffer: wgpu::Buffer,
     mesh_bind_group: wgpu::BindGroup,
+
+    render_pipeline_4d: wgpu::RenderPipeline,
 }
 
 impl State {
@@ -121,6 +136,99 @@ impl State {
             &device,
             &surface_config,
             wgpu::TextureFormat::Depth32Float,
+        );
+
+        let crosshair_image = image::open("assets/images/crosshair.png").unwrap();
+        let crosshair_image_rgba = crosshair_image.as_rgba8().unwrap();
+        let crosshair_texture = texture::Texture::from_image(&device, &queue, crosshair_image_rgba);
+        let crosshair_sprite_texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            });
+        let crosshair_sprite_texture_bind_group =
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &crosshair_sprite_texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&crosshair_texture.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&crosshair_texture.sampler),
+                    },
+                ],
+                label: None,
+            });
+
+        let crosshair_sprite_uniforms_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::bytes_of(&SpriteUniforms {
+                    scale: vec2(
+                        crosshair_image_rgba.dimensions().0 as f32 / surface_config.width as f32,
+                        crosshair_image_rgba.dimensions().1 as f32 / surface_config.height as f32,
+                    ),
+                    position: vec2(0.0, 0.0),
+                    tint: vec4(0.0, 0.0, 0.0, 0.0),
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let crosshair_sprite_uniforms_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: None,
+            });
+
+        let crosshair_sprite_uniforms_bind_group = wgputil::bind_group(
+            &device,
+            &crosshair_sprite_uniforms_bind_group_layout,
+            &crosshair_sprite_uniforms_buffer,
+        );
+
+        let render_pipeline_sprite = wgputil::create_pipeline(
+            &device,
+            &surface_config,
+            true,
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/shaders/sprite.vert"
+            )),
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/shaders/sprite.frag"
+            )),
+            &[
+                &crosshair_sprite_uniforms_bind_group_layout,
+                &crosshair_sprite_texture_bind_group_layout,
+            ],
         );
 
         let mixtable_uniform_bind_group_layout =
@@ -178,24 +286,6 @@ impl State {
                 label: None,
             });
 
-        let render_pipeline = wgputil::create_pipeline(
-            &device,
-            &surface_config,
-            true,
-            include_str!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/assets/shaders/slice.vert"
-            )),
-            include_str!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/assets/shaders/slice.frag"
-            )),
-            &[
-                &mixtable_uniform_bind_group_layout,
-                &camera_uniforms_bind_group_layout,
-                &mesh_bind_group_layout,
-            ],
-        );
 
         let mesh: mesh::Mesh4 = mesh::Mesh4::cube();
         // Initialize the cube to be orbiting the origin while revolving
@@ -268,6 +358,25 @@ impl State {
             label: None,
         });
 
+        let render_pipeline_4d = wgputil::create_pipeline(
+            &device,
+            &surface_config,
+            true,
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/shaders/slice.vert"
+            )),
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/shaders/slice.frag"
+            )),
+            &[
+                &mixtable_uniform_bind_group_layout,
+                &camera_uniforms_bind_group_layout,
+                &mesh_bind_group_layout,
+            ],
+        );
+
         Self {
             size,
             surface,
@@ -275,7 +384,12 @@ impl State {
             queue,
             surface_config,
             depth_texture,
-            render_pipeline,
+
+            crosshair_sprite_texture_bind_group,
+            _crosshair_texture: crosshair_texture,
+            crosshair_sprite_uniforms_bind_group,
+            _crosshair_sprite_uniforms_buffer: crosshair_sprite_uniforms_buffer,
+            render_pipeline_sprite,
 
             mesh,
             mesh_body,
@@ -290,6 +404,7 @@ impl State {
             _tetrahedra_buffer: tetrahedra_buffer,
             transform_buffer,
             mesh_bind_group,
+            render_pipeline_4d,
         }
     }
 
@@ -413,7 +528,7 @@ impl State {
                 }),
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_pipeline(&self.render_pipeline_4d);
             render_pass.set_bind_group(0, &self.mixtable_uniform_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_uniforms_bind_group, &[]);
             render_pass.set_bind_group(2, &self.mesh_bind_group, &[]);
@@ -421,6 +536,11 @@ impl State {
             // combinations of vertices (arranged in a triangle strip) that may
             // intersect the hyperplane of the camera.
             render_pass.draw(0..(self.mesh.num_tetrahedra * 7) as u32, 0..1);
+
+            render_pass.set_pipeline(&self.render_pipeline_sprite);
+            render_pass.set_bind_group(0, &self.crosshair_sprite_uniforms_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.crosshair_sprite_texture_bind_group, &[]);
+            render_pass.draw(0..4u32, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
