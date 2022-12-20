@@ -1,3 +1,4 @@
+use crate::draw_state;
 use crate::mesh;
 use crate::na;
 use crate::physics;
@@ -48,6 +49,7 @@ pub struct MeshBuffers {
     num_vertices: u32,
     _tetrahedra_buffer: wgpu::Buffer,
     transform_buffer: wgpu::Buffer,
+    draw_state_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
 }
 
@@ -63,6 +65,24 @@ impl TransformUniforms {
         Self {
             linear: body.orientation.to_matrix(),
             translation: body.position,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct DrawStateUniforms {
+    pub outline: na::Vector4,
+    pub hollow: u32,
+    pub padding: [u32; 3],
+}
+
+impl DrawStateUniforms {
+    fn from_draw_state(state: &draw_state::DrawState) -> Self {
+        Self {
+            outline: state.outline,
+            hollow: state.hollow as u32,
+            padding: [0, 0, 0],
         }
     }
 }
@@ -234,6 +254,16 @@ impl MeshRenderer {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
                 label: None,
             });
@@ -312,12 +342,20 @@ impl MeshRenderer {
         }
 
         let mut new_meshes = Vec::new();
-        for (entity, (body, mesh)) in world.query::<(&physics::RigidBody, &mesh::Mesh4)>().iter() {
+        for (entity, (body, mesh, draw_state)) in world
+            .query::<(&physics::RigidBody, &mesh::Mesh4, &draw_state::DrawState)>()
+            .iter()
+        {
             if let Ok(mesh_buffers) = world.get::<&MeshBuffers>(entity) {
                 queue.write_buffer(
                     &mesh_buffers.transform_buffer,
                     0,
                     bytemuck::bytes_of(&TransformUniforms::from_body(body)),
+                );
+                queue.write_buffer(
+                    &mesh_buffers.draw_state_buffer,
+                    0,
+                    bytemuck::bytes_of(&DrawStateUniforms::from_draw_state(draw_state)),
                 );
             } else {
                 let tetrahedra_buffer =
@@ -334,6 +372,15 @@ impl MeshRenderer {
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
 
+                let draw_state_buffer =
+                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: None,
+                        contents: bytemuck::bytes_of(&DrawStateUniforms::from_draw_state(
+                            draw_state,
+                        )),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
                 let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                     layout: &self.mesh_bind_group_layout,
                     entries: &[
@@ -345,6 +392,10 @@ impl MeshRenderer {
                             binding: 1,
                             resource: transform_buffer.as_entire_binding(),
                         },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: draw_state_buffer.as_entire_binding(),
+                        },
                     ],
                     label: None,
                 });
@@ -355,6 +406,7 @@ impl MeshRenderer {
                         num_vertices: (mesh.num_tetrahedra * 7) as u32,
                         _tetrahedra_buffer: tetrahedra_buffer,
                         transform_buffer,
+                        draw_state_buffer,
                         bind_group,
                     },
                 ));

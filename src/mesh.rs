@@ -20,7 +20,7 @@ struct Mix {
 
 #[derive(Debug, Clone)]
 pub struct Mesh4 {
-    vertices: std::vec::Vec<na::Vector4>,
+    pub vertices: std::vec::Vec<na::Vector4>,
     normals: std::vec::Vec<na::Vector4>,
     colors: std::vec::Vec<na::Vector4>,
     indices: std::vec::Vec<u32>,

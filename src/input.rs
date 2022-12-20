@@ -1,4 +1,4 @@
-use winit::event::VirtualKeyCode;
+use winit::event::{ButtonId, VirtualKeyCode};
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct InputState {
@@ -17,6 +17,8 @@ pub struct InputState {
     pub pitch: f32,
 
     pub hyperlook: bool,
+
+    pub grab: bool,
 }
 
 impl InputState {
@@ -48,5 +50,11 @@ impl InputState {
     pub fn mouse_moved(&mut self, x: f64, y: f64) {
         self.yaw = x as f32;
         self.pitch = y as f32;
+    }
+
+    pub fn mouse_click(&mut self, button: ButtonId, pressed: bool) {
+        if button == 0 {
+            self.grab = pressed;
+        }
     }
 }

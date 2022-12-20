@@ -130,7 +130,7 @@ impl SpriteRenderer {
                                     / screen_dimensions.height as f32,
                             ),
                             position: vec2(0.0, 0.0),
-                            tint: vec4(0.0, 0.0, 0.0, 0.0),
+                            tint: vec4(0.0, 0.0, 0.0, 1.0),
                         }),
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });

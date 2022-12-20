@@ -1,5 +1,8 @@
 mod actor;
+mod collision;
+mod draw_state;
 mod ga;
+mod gjk;
 mod input;
 mod mesh;
 mod mesh_renderer;
@@ -32,6 +35,7 @@ fn main() {
         actor::Actor {
             move_thrust: 30.0,
             look_torque: 5.0,
+            grab_state: actor::GrabState::Not,
         },
         mesh_renderer::Camera {
             aspect: window.inner_size().width as f32 / window.inner_size().height as f32,
@@ -60,6 +64,11 @@ fn main() {
             ..Default::default()
         },
         mesh::Mesh4::cube(),
+        collision::Collider::from_mesh4(&mesh::Mesh4::cube()),
+        draw_state::DrawState {
+            outline: na::Vector4::zeros(),
+            hollow: false,
+        },
     ));
     world.spawn((
         physics::RigidBody {
@@ -69,6 +78,11 @@ fn main() {
             ..Default::default()
         },
         mesh::Mesh4::cube(),
+        collision::Collider::from_mesh4(&mesh::Mesh4::cube()),
+        draw_state::DrawState {
+            outline: na::Vector4::zeros(),
+            hollow: false,
+        },
     ));
 
     let dt: f32 = 1.0 / 120.0;
@@ -126,6 +140,12 @@ fn main() {
                 if cursor_mode == winit::window::CursorGrabMode::Locked {
                     input_state.mouse_moved(x, y);
                 }
+            }
+            Event::DeviceEvent {
+                event: DeviceEvent::Button { button, state },
+                ..
+            } => {
+                input_state.mouse_click(button, state == ElementState::Pressed);
             }
             Event::RedrawRequested(_) => {
                 // Constant-time physics updates - accumulate the elapsed time

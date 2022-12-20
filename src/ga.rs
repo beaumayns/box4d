@@ -14,10 +14,10 @@ impl Bivector4 {
     }
 
     pub fn norm(&self) -> f32 {
-        self.squared_norm().sqrt()
+        self.norm_squared().sqrt()
     }
 
-    pub fn squared_norm(&self) -> f32 {
+    pub fn norm_squared(&self) -> f32 {
         self.c.iter().map(|&x| x * x).sum()
     }
 }
@@ -98,29 +98,6 @@ impl DivAssign<f32> for Bivector4 {
     }
 }
 
-pub trait Wedge<T> {
-    type Output;
-
-    fn wedge(&self, rhs: T) -> Self::Output;
-}
-
-impl Wedge<na::Vector4> for na::Vector4 {
-    type Output = Bivector4;
-
-    fn wedge(&self, rhs: na::Vector4) -> Bivector4 {
-        Bivector4 {
-            c: [
-                self[0] * rhs[1] - self[1] * rhs[0],
-                self[0] * rhs[2] - self[2] * rhs[0],
-                self[0] * rhs[3] - self[3] * rhs[0],
-                self[1] * rhs[2] - self[2] * rhs[1],
-                self[1] * rhs[3] - self[3] * rhs[1],
-                self[2] * rhs[3] - self[3] * rhs[2],
-            ],
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct Rotor4 {
     c: [f32; 8],
@@ -194,5 +171,154 @@ impl MulAssign for Rotor4 {
         self.c[5] = l0 * r5 - l1 * r3 + l2 * r7 + l3 * r1 + l4 * r6 + l5 * r0 - l6 * r4 + l7 * r2;
         self.c[6] = l0 * r6 - l1 * r7 - l2 * r3 + l3 * r2 - l4 * r5 + l5 * r4 + l6 * r0 - l7 * r1;
         self.c[7] = l0 * r7 + l1 * r6 - l2 * r5 + l3 * r4 + l4 * r3 - l5 * r2 + l6 * r1 + l7 * r0;
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Trivector4 {
+    c: [f32; 4],
+}
+
+impl Trivector4 {
+    pub fn norm_squared(&self) -> f32 {
+        self.c.iter().map(|&x| x * x).sum()
+    }
+}
+
+impl Index<usize> for Trivector4 {
+    type Output = f32;
+
+    fn index(&self, i: usize) -> &f32 {
+        &self.c[i]
+    }
+}
+
+pub trait Wedge<T> {
+    type Output;
+
+    fn wedge(&self, rhs: T) -> Self::Output;
+}
+
+impl Wedge<na::Vector4> for na::Vector4 {
+    type Output = Bivector4;
+
+    fn wedge(&self, rhs: na::Vector4) -> Bivector4 {
+        Bivector4 {
+            c: [
+                self[0] * rhs[1] - self[1] * rhs[0],
+                self[0] * rhs[2] - self[2] * rhs[0],
+                self[0] * rhs[3] - self[3] * rhs[0],
+                self[1] * rhs[2] - self[2] * rhs[1],
+                self[1] * rhs[3] - self[3] * rhs[1],
+                self[2] * rhs[3] - self[3] * rhs[2],
+            ],
+        }
+    }
+}
+
+impl Wedge<Bivector4> for na::Vector4 {
+    type Output = Trivector4;
+
+    fn wedge(&self, rhs: Bivector4) -> Trivector4 {
+        Trivector4 {
+            c: [
+                self[0] * rhs[3] - self[1] * rhs[1] + self[2] * rhs[0],
+                self[0] * rhs[4] - self[1] * rhs[2] + self[3] * rhs[0],
+                self[0] * rhs[5] - self[2] * rhs[2] + self[3] * rhs[1],
+                self[1] * rhs[5] - self[2] * rhs[4] + self[3] * rhs[3],
+            ],
+        }
+    }
+}
+
+pub trait Reject {
+    fn reject(&self, v: na::Vector4) -> na::Vector4;
+}
+
+impl Reject for na::Vector4 {
+    #[rustfmt::skip]
+    fn reject(&self, v: na::Vector4) -> na::Vector4 {
+        na::vec4(
+            v[0] * self[1] * self[1]
+                + v[0] * self[2] * self[2]
+                + v[0] * self[3] * self[3]
+                - v[1] * self[0] * self[1]
+                - v[2] * self[0] * self[2]
+                - v[3] * self[0] * self[3],
+            -v[0] * self[0] * self[1]
+                + v[1] * self[0] * self[0]
+                + v[1] * self[2] * self[2]
+                + v[1] * self[3] * self[3]
+                - v[2] * self[1] * self[2]
+                - v[3] * self[1] * self[3],
+            -v[0] * self[0] * self[2]
+                - v[1] * self[1] * self[2]
+                + v[2] * self[0] * self[0]
+                + v[2] * self[1] * self[1]
+                + v[2] * self[3] * self[3]
+                - v[3] * self[2] * self[3],
+            -v[0] * self[0] * self[3]
+                - v[1] * self[1] * self[3]
+                - v[2] * self[2] * self[3]
+                + v[3] * self[0] * self[0]
+                + v[3] * self[1] * self[1]
+                + v[3] * self[2] * self[2],
+        ) / self.norm_squared()
+    }
+}
+
+impl Reject for Bivector4 {
+    #[rustfmt::skip]
+    fn reject(&self, v: na::Vector4) -> na::Vector4 {
+        na::vec4(
+            v[0] * self[3] * self[3]
+                + v[0] * self[4] * self[4]
+                + v[0] * self[5] * self[5]
+                - v[1] * self[1] * self[3]
+                - v[1] * self[2] * self[4]
+                + v[2] * self[0] * self[3]
+                - v[2] * self[2] * self[5]
+                + v[3] * self[0] * self[4]
+                + v[3] * self[1] * self[5],
+            -v[0] * self[1] * self[3]
+                - v[0] * self[2] * self[4]
+                + v[1] * self[1] * self[1]
+                + v[1] * self[2] * self[2]
+                + v[1] * self[5] * self[5]
+                - v[2] * self[0] * self[1]
+                - v[2] * self[4] * self[5]
+                - v[3] * self[0] * self[2]
+                + v[3] * self[3] * self[5],
+            v[0] * self[0] * self[3]
+                - v[0] * self[2] * self[5]
+                - v[1] * self[0] * self[1]
+                - v[1] * self[4] * self[5]
+                + v[2] * self[0] * self[0]
+                + v[2] * self[2] * self[2]
+                + v[2] * self[4] * self[4]
+                - v[3] * self[1] * self[2]
+                - v[3] * self[3] * self[4],
+            v[0] * self[0] * self[4]
+                + v[0] * self[1] * self[5]
+                - v[1] * self[0] * self[2]
+                + v[1] * self[3] * self[5]
+                - v[2] * self[1] * self[2]
+                - v[2] * self[3] * self[4]
+                + v[3] * self[0] * self[0]
+                + v[3] * self[1] * self[1]
+                + v[3] * self[3] * self[3],
+        ) / self.norm_squared()
+    }
+}
+
+impl Reject for Trivector4 {
+    #[rustfmt::skip]
+    fn reject(&self, v: na::Vector4) -> na::Vector4 {
+        na::vec4(
+            self[3] * ( v[0] * self[3] - v[1] * self[2] + v[2] * self[1] - v[3] * self[0]),
+            self[2] * (-v[0] * self[3] + v[1] * self[2] - v[2] * self[1] + v[3] * self[0]),
+            self[1] * ( v[0] * self[3] - v[1] * self[2] + v[2] * self[1] - v[3] * self[0]),
+            self[0] * (-v[0] * self[3] + v[1] * self[2] - v[2] * self[1] + v[3] * self[0]),
+        ) / self.norm_squared()
     }
 }

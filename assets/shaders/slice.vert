@@ -4,6 +4,7 @@
 layout(location = 0) out vec4 world_position;
 layout(location = 1) out vec4 normal;
 layout(location = 2) out vec4 color;
+layout(location = 3) out vec3 barycentric;
 
 struct Mix {
     uint a;
@@ -65,5 +66,7 @@ void main()
     world_position = mix(world_positions[m.a], world_positions[m.b], s);
     normal = mix(tetrahedron.normals[m.a], tetrahedron.normals[m.b], s);
     color = mix(tetrahedron.colors[m.a], tetrahedron.colors[m.b], s);
+    barycentric = vec3(0);
+    barycentric[gl_VertexIndex % 3] = 1;
     gl_Position = camera.projection * vec4((camera.view * (world_position - camera.position)).xyz, 1.0);
 }
