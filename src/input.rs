@@ -19,6 +19,7 @@ pub struct InputState {
     pub hyperlook: bool,
 
     pub grab: bool,
+    pub center_grab: bool,
 }
 
 impl InputState {
