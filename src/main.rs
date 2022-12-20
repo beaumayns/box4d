@@ -7,6 +7,7 @@ mod input;
 mod joint;
 mod mesh;
 mod mesh_renderer;
+mod mpr;
 mod na;
 mod physics;
 mod renderer;
@@ -157,6 +158,7 @@ fn main() {
                 remaining += (elapsed.as_nanos() as f64 / 1e9) as f32;
 
                 while remaining > 0.0 {
+                    collision::do_collision(&mut world);
                     actor::update_actor(&mut world, &input_state, player_entity);
                     physics::apply_physics(dt, &mut world);
                     remaining -= dt;
