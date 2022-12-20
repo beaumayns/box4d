@@ -1,0 +1,12 @@
+[package]
+name = "box4d"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+winit = "0.27"
+futures = "0.3"
+wgpu = { version = "0.13", features = [ "glsl" ] }
+naga = "0.9"
+bytemuck = { version = "1.12", features = [ "derive" ] }
+nalgebra = { version = "0.31", features = [ "bytemuck" ] }
