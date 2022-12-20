@@ -1,6 +1,7 @@
 use std::ops::{Mul, MulAssign};
 
 pub type Matrix4 = nalgebra::Matrix4<f32>;
+pub type Matrix4x3 = nalgebra::SMatrix<f32, 4, 3>;
 pub type Matrix4x6 = nalgebra::SMatrix<f32, 4, 6>;
 pub type Vector2 = nalgebra::SVector<f32, 2>;
 pub type Vector4 = nalgebra::SVector<f32, 4>;
@@ -31,6 +32,13 @@ impl Affine4 {
     pub fn from_po(position: Vector4, orientation: Matrix4) -> Self {
         Self {
             linear: orientation,
+            translation: position,
+        }
+    }
+
+    pub fn from_pos(position: Vector4, orientation: Matrix4, scale: Vector4) -> Self {
+        Self {
+            linear: Matrix4::from_diagonal(&scale) * orientation,
             translation: position,
         }
     }

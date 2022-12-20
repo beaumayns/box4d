@@ -1,4 +1,5 @@
 use crate::collision;
+use crate::contact;
 use crate::ga;
 use crate::na;
 
@@ -100,6 +101,37 @@ impl Simplex {
         // shenanigans. Give up and I guess we'll try again next frame.
         false
     }
+
+    fn get_contact(&self) -> Option<contact::ContactPoint> {
+        // matrix to convert from minkowski-space to barycentric coordinates of portal tetrahedron
+        // to origin
+        let m = na::Matrix4x3::from_columns(&[
+            self.portal[1].minkowski - self.portal[0].minkowski,
+            self.portal[2].minkowski - self.portal[0].minkowski,
+            self.portal[3].minkowski - self.portal[0].minkowski,
+        ]);
+
+        // left-inverse of matrix made up of tetrahedron's edges to change-of-basis
+        // the projection of the origin into barycentric coordinates
+        if let Some(left_inverse) = (m.transpose() * m).try_inverse() {
+            let bc = left_inverse * m.transpose() * -self.portal[0].minkowski;
+            // use barycentric coords of origin in CSO-space to get it in local space
+            // of each collider
+            Some(contact::ContactPoint {
+                a_local: self.portal[0].a_local
+                    + (bc[0] * (self.portal[1].a_local - self.portal[0].a_local))
+                    + (bc[1] * (self.portal[2].a_local - self.portal[0].a_local))
+                    + (bc[2] * (self.portal[3].a_local - self.portal[0].a_local)),
+                b_local: self.portal[0].b_local
+                    + (bc[0] * (self.portal[1].b_local - self.portal[0].b_local))
+                    + (bc[1] * (self.portal[2].b_local - self.portal[0].b_local))
+                    + (bc[2] * (self.portal[3].b_local - self.portal[0].b_local)),
+                normal: -1.0 * (self.portal[0].minkowski + (m * bc)),
+            })
+        } else {
+            None
+        }
+    }
 }
 
 pub fn collide(
@@ -107,7 +139,7 @@ pub fn collide(
     a_transform: &na::Affine4,
     b_collider: &collision::Collider,
     b_transform: &na::Affine4,
-) -> Option<f32> {
+) -> Option<contact::ContactPoint> {
     let a_transform_inverse = a_transform.inverse().linear;
     let b_transform_inverse = b_transform.inverse().linear;
 
@@ -188,10 +220,5 @@ pub fn collide(
         }
     }
 
-    Some(
-        simplex
-            .portal_trivector()
-            .reject(-simplex.portal[0].minkowski)
-            .norm(),
-    )
+    simplex.get_contact()
 }

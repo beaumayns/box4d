@@ -1,5 +1,7 @@
 mod actor;
 mod collision;
+mod constraints;
+mod contact;
 mod draw_state;
 mod ga;
 mod gjk;
@@ -21,8 +23,6 @@ use winit::{
     window::WindowBuilder,
 };
 
-use crate::ga::Wedge;
-
 fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
@@ -31,6 +31,7 @@ fn main() {
 
     let mut renderer = renderer::Renderer::new(&window);
     let mut world = hecs::World::new();
+    let mut constraints = constraints::Constraints::new();
     let mut input_state = input::InputState::default();
 
     let player_entity = world.spawn((
@@ -55,27 +56,35 @@ fn main() {
             position: na::vec4(0.0, 0.0, -4.0, 0.0),
             linear_damping: 0.9,
             angular_damping: 0.9,
+            gravity: 0.0,
             ..Default::default()
         }
         .with_mass(100.0),
     ));
+    {
+        let floor_mesh = mesh::Mesh4::cube().transformed(&na::Affine4::from_pos(
+            na::Vector4::zeros(),
+            na::Matrix4::identity(),
+            na::vec4(10.0, 10.0, 10.0, 10.0),
+        ));
+        world.spawn((
+            physics::RigidBody {
+                position: na::vec4(0.0, -7.0, 0.0, 0.0),
+                gravity: 0.0,
+                ..Default::default()
+            }
+            .with_mass(f32::INFINITY),
+            collision::Collider::from_mesh4(&floor_mesh),
+            floor_mesh,
+            draw_state::DrawState {
+                outline: na::Vector4::zeros(),
+                hollow: false,
+            },
+        ));
+    }
     world.spawn((
         physics::RigidBody {
-            position: na::vec4(-1.0, 0.0, 0.0, 0.0),
-            angular_velocity: na::vec4(0.7, 0.0, 0.0, 0.7).wedge(na::vec4(0.0, 0.0, 0.7, 0.0))
-                + na::vec4(0.7, 0.7, 0.0, 0.0).wedge(na::vec4(0.0, 0.0, 0.0, 0.5)),
-            ..Default::default()
-        },
-        mesh::Mesh4::cube(),
-        collision::Collider::from_mesh4(&mesh::Mesh4::cube()),
-        draw_state::DrawState {
-            outline: na::Vector4::zeros(),
-            hollow: false,
-        },
-    ));
-    world.spawn((
-        physics::RigidBody {
-            position: na::vec4(1.0, 0.0, 0.0, 0.0),
+            position: na::vec4(0.0, 0.0, 0.0, 0.0),
             ..Default::default()
         },
         mesh::Mesh4::cube(),
@@ -158,9 +167,9 @@ fn main() {
                 remaining += (elapsed.as_nanos() as f64 / 1e9) as f32;
 
                 while remaining > 0.0 {
-                    collision::do_collision(&mut world);
-                    actor::update_actor(&mut world, &input_state, player_entity);
-                    physics::apply_physics(dt, &mut world);
+                    actor::update_actor(&mut constraints, &mut world, &input_state, player_entity);
+                    collision::do_collisions(&mut constraints, &mut world);
+                    physics::apply_physics(dt, &mut constraints, &mut world);
                     remaining -= dt;
                 }
 

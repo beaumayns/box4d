@@ -1,3 +1,5 @@
+use crate::constraints;
+use crate::contact;
 use crate::draw_state;
 use crate::gjk;
 use crate::mesh;
@@ -67,11 +69,8 @@ pub fn cast_ray(
     nearest.map(|entity| (entity, nearest_distance))
 }
 
-pub fn do_collision(world: &mut hecs::World) {
-    for (_, draw_state) in world.query_mut::<&mut draw_state::DrawState>() {
-        draw_state.outline = na::vec4(0.0, 0.0, 0.0, 0.0);
-    }
-
+pub fn do_collisions(constraints: &mut constraints::Constraints, world: &mut hecs::World) {
+    let mut draw_state_query = world.query::<&mut draw_state::DrawState>();
     for pair in world
         .query::<(&Collider, &physics::RigidBody)>()
         .iter()
@@ -80,22 +79,44 @@ pub fn do_collision(world: &mut hecs::World) {
         let (a, (a_collider, a_body)) = pair[0];
         let (b, (b_collider, b_body)) = pair[1];
 
-        if (a_body.position - b_body.position).norm() < (a_collider.radius + b_collider.radius) {
-            if let Some(t) = mpr::collide(
+        let arbiter = constraints.get_arbiter(a, b);
+        let contact = if (a_body.position - b_body.position).norm()
+            < (a_collider.radius + b_collider.radius)
+        {
+            mpr::collide(
                 a_collider,
                 &a_body.get_transform(),
                 b_collider,
                 &b_body.get_transform(),
-            ) {
-                let brightness = t.clamp(0.0, 1.0);
-                world
-                    .get_mut::<draw_state::DrawState>(a)
-                    .map(|mut x| x.outline = na::vec4(0.0, brightness, 0.0, 1.0))
-                    .ok();
-                world
-                    .get_mut::<draw_state::DrawState>(b)
-                    .map(|mut x| x.outline = na::vec4(0.0, brightness, 0.0, 1.0))
-                    .ok();
+            )
+        } else {
+            None
+        };
+
+        match (arbiter, contact) {
+            (None, None) => {}
+            (None, Some(contact_point)) => {
+                constraints.add_arbiter(a, b, contact::Arbiter::new(contact_point, a_body, b_body));
+                if let Some(mut state) = draw_state_query.view().get_mut(a) {
+                    state.outline = na::vec4(0.0, 1.0, 0.0, 1.0);
+                }
+                if let Some(mut state) = draw_state_query.view().get_mut(b) {
+                    state.outline = na::vec4(0.0, 1.0, 0.0, 1.0);
+                }
+            }
+            (Some(arbiter), Some(contact_point)) => {
+                arbiter.update(contact_point, a_body, b_body);
+            }
+            (Some(_), None) => {
+                constraints.remove_arbiter(a, b);
+                draw_state_query
+                    .view()
+                    .get_mut(a)
+                    .map_or((), |mut state| state.outline = na::Vector4::zeros());
+                draw_state_query
+                    .view()
+                    .get_mut(b)
+                    .map_or((), |mut state| state.outline = na::Vector4::zeros());
             }
         }
     }
