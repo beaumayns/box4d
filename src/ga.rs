@@ -1,5 +1,5 @@
 use crate::na;
-use std::ops::{Add, AddAssign, Index, Mul, MulAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Index, Mul, MulAssign};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Bivector4 {
@@ -48,6 +48,18 @@ impl AddAssign<Bivector4> for Bivector4 {
     }
 }
 
+impl Mul<Bivector4> for f32 {
+    type Output = Bivector4;
+
+    fn mul(self, rhs: Bivector4) -> Bivector4 {
+        let mut r: Bivector4 = rhs;
+        for x in &mut r.c {
+            *x *= self;
+        }
+        r
+    }
+}
+
 impl Mul<f32> for Bivector4 {
     type Output = Self;
 
@@ -62,6 +74,26 @@ impl MulAssign<f32> for Bivector4 {
     fn mul_assign(&mut self, rhs: f32) {
         for x in &mut self.c {
             *x *= rhs;
+        }
+    }
+}
+
+impl Div<f32> for Bivector4 {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self {
+        let mut mc = self.c;
+        for x in &mut mc {
+            *x /= rhs;
+        }
+        Self { c: mc }
+    }
+}
+
+impl DivAssign<f32> for Bivector4 {
+    fn div_assign(&mut self, rhs: f32) {
+        for x in &mut self.c {
+            *x /= rhs;
         }
     }
 }

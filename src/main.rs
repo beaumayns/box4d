@@ -1,4 +1,5 @@
 mod ga;
+mod input;
 mod mesh;
 mod na;
 mod rigidbody;
@@ -199,8 +200,6 @@ impl State {
         let mesh: mesh::Mesh4 = mesh::Mesh4::cube();
         // Initialize the cube to be orbiting the origin while revolving
         let mesh_body = rigidbody::RigidBody {
-            position: vec4(1.0, 0.0, 0.0, 0.0),
-            velocity: vec4(0.0, 0.0, 1.0, 0.2),
             angular_velocity: vec4(0.7, 0.0, 0.0, 0.7).wedge(vec4(0.0, 0.0, 0.7, 0.0))
                 + vec4(0.7, 0.7, 0.0, 0.0).wedge(vec4(0.0, 0.0, 0.0, 0.5)),
             ..Default::default()
@@ -211,6 +210,8 @@ impl State {
         let camera = Camera {
             body: rigidbody::RigidBody {
                 position: vec4(0.0, 0.0, -4.0, 0.0),
+                linear_damping: 0.9,
+                angular_damping: 0.9,
                 ..Default::default()
             },
             aspect: surface_config.width as f32 / surface_config.height as f32,
@@ -304,8 +305,60 @@ impl State {
         }
     }
 
-    fn update(&mut self, dt: f32) {
+    fn apply_input(&mut self, input_state: &input::InputState) {
+        let orientation = self.camera.body.orientation.to_matrix();
+
+        const MOVE_THRUST: f32 = 20.0;
+        const LOOK_TORQUE: f32 = 5.0;
+
+        let right = orientation.column(0).normalize();
+        let up = orientation.column(1).normalize();
+        let forward = orientation.column(2).normalize();
+        let ana = orientation.column(3).normalize();
+
+        if input_state.up {
+            self.camera.body.force += up * MOVE_THRUST;
+        }
+        if input_state.down {
+            self.camera.body.force -= up * MOVE_THRUST;
+        }
+        if input_state.right {
+            self.camera.body.force += right * MOVE_THRUST;
+        }
+        if input_state.left {
+            self.camera.body.force -= right * MOVE_THRUST;
+        }
+        if input_state.forward {
+            self.camera.body.force += forward * MOVE_THRUST;
+        }
+        if input_state.back {
+            self.camera.body.force -= forward * MOVE_THRUST;
+        }
+        if input_state.ana {
+            self.camera.body.force += ana * MOVE_THRUST;
+        }
+        if input_state.kata {
+            self.camera.body.force -= ana * MOVE_THRUST;
+        }
+
+        let (yaw_plane, pitch_plane, roll_plane) = match input_state.hyperlook {
+            false => (forward.wedge(right), up.wedge(forward), right.wedge(up)),
+            true => (forward.wedge(ana), up.wedge(ana), right.wedge(ana)),
+        };
+        self.camera.body.torque += LOOK_TORQUE * input_state.yaw * yaw_plane;
+        self.camera.body.torque += LOOK_TORQUE * input_state.pitch * pitch_plane;
+        if input_state.roll_left {
+            self.camera.body.torque += 3.0 * LOOK_TORQUE * roll_plane;
+        }
+        if input_state.roll_right {
+            self.camera.body.torque += -3.0 * LOOK_TORQUE * roll_plane;
+        }
+    }
+
+    fn update(&mut self, input_state: &input::InputState, dt: f32) {
+        self.apply_input(input_state);
         self.mesh_body.update(dt);
+        self.camera.body.update(dt);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -380,8 +433,12 @@ impl State {
 fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let mut cursor_mode = winit::window::CursorGrabMode::Locked;
+    window.set_cursor_grab(cursor_mode).unwrap();
 
     let mut state = futures::executor::block_on(State::new(&window));
+
+    let mut input_state = input::InputState::default();
 
     let dt: f32 = 1.0 / 120.0;
     let mut remaining: f32 = 0.0;
@@ -389,6 +446,7 @@ fn main() {
 
     event_loop.run(move |event, _, control_flow| {
         match event {
+            Event::NewEvents(_) => input_state.new_events(),
             Event::WindowEvent {
                 ref event,
                 window_id,
@@ -404,16 +462,40 @@ fn main() {
                     input:
                         KeyboardInput {
                             virtual_keycode: Some(keycode),
+                            state: key_state,
                             ..
                         },
                     ..
                 } => {
-                    if *keycode == VirtualKeyCode::Escape {
-                        *control_flow = ControlFlow::Exit;
+                    let pressed = *key_state == ElementState::Pressed;
+                    input_state.keyboard_event(*keycode, pressed);
+                    match *keycode {
+                        VirtualKeyCode::Escape => *control_flow = ControlFlow::Exit,
+                        VirtualKeyCode::Tab if pressed => {
+                            cursor_mode = match cursor_mode {
+                                winit::window::CursorGrabMode::Locked => {
+                                    winit::window::CursorGrabMode::None
+                                }
+                                winit::window::CursorGrabMode::None => {
+                                    winit::window::CursorGrabMode::Locked
+                                }
+                                _ => cursor_mode,
+                            };
+                            window.set_cursor_grab(cursor_mode).unwrap();
+                        }
+                        _ => {}
                     }
                 }
                 _ => {}
             },
+            Event::DeviceEvent {
+                event: DeviceEvent::MouseMotion { delta: (x, y) },
+                ..
+            } => {
+                if cursor_mode == winit::window::CursorGrabMode::Locked {
+                    input_state.mouse_moved(x, y);
+                }
+            }
             Event::RedrawRequested(_) => {
                 // Constant-time physics updates - accumulate the elapsed time
                 // since previous frame, and spend it in fixed chunks doing physics
@@ -424,7 +506,7 @@ fn main() {
                 remaining += (elapsed.as_nanos() as f64 / 1e9) as f32;
 
                 while remaining > 0.0 {
-                    state.update(dt);
+                    state.update(&input_state, dt);
                     remaining -= dt;
                 }
 
