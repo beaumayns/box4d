@@ -11,3 +11,4 @@ naga = "0.9"
 bytemuck = { version = "1.12", features = [ "derive" ] }
 nalgebra = { version = "0.31", features = [ "bytemuck" ] }
 itertools = "0.10"
+image = "0.24"
