@@ -11,6 +11,11 @@ layout(std140, set = 1, binding = 0) uniform CameraUniform {
     Camera camera;
 };
 
+layout(std140, set = 2, binding = 2) uniform State {
+    vec4 outline;
+    uint hollow;
+};
+
 const vec4 light_position = vec4(2, 2, 0, 0);
 const vec3 light_color = 5 * vec3(0.5, 0.5, 0.5);
 const vec3 ambient_light = 4 * vec3(0.4, 0.4, 0.45);
@@ -21,6 +26,7 @@ const float shininess = 40.0f;
 layout(location = 0) in vec4 world_position;
 layout(location = 1) in vec4 normal;
 layout(location = 2) in vec4 color;
+layout(location = 3) in vec3 barycentric;
 
 layout(location = 0) out vec4 final_color;
 
@@ -37,4 +43,14 @@ void main() {
     vec3 specular = light_color * pow(clamp(dot(n, H), 0.0, 1.0), shininess);
 
     final_color = vec4(pow((ambient + diffuse + specular) * color.xyz, vec3(2.2)), color.w);
+
+    vec3 a3 = step(2.0 * fwidth(barycentric), barycentric);
+    if(outline.w != 0.0 || hollow != 0) {
+        float m = min(min(a3.x, a3.y), a3.z);
+        if(m > 0.0 && hollow != 0) {
+            discard;
+        }
+
+        final_color = vec4(mix(mix(vec3(0), outline.xyz, outline.w), final_color.xyz, m), final_color.w);
+    }
 }
