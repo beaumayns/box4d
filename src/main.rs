@@ -4,6 +4,7 @@ mod draw_state;
 mod ga;
 mod gjk;
 mod input;
+mod joint;
 mod mesh;
 mod mesh_renderer;
 mod na;
@@ -33,8 +34,8 @@ fn main() {
 
     let player_entity = world.spawn((
         actor::Actor {
-            move_thrust: 30.0,
-            look_torque: 5.0,
+            move_thrust: 3000.0,
+            look_torque: 500.0,
             grab_state: actor::GrabState::Not,
         },
         mesh_renderer::Camera {
@@ -54,7 +55,8 @@ fn main() {
             linear_damping: 0.9,
             angular_damping: 0.9,
             ..Default::default()
-        },
+        }
+        .with_mass(100.0),
     ));
     world.spawn((
         physics::RigidBody {
@@ -73,8 +75,6 @@ fn main() {
     world.spawn((
         physics::RigidBody {
             position: na::vec4(1.0, 0.0, 0.0, 0.0),
-            angular_velocity: na::vec4(0.7, 0.0, 0.0, 0.7).wedge(-na::vec4(0.0, 0.0, 0.7, 0.0))
-                + na::vec4(0.7, 0.7, 0.0, 0.0).wedge(-na::vec4(0.0, 0.0, 0.0, 0.5)),
             ..Default::default()
         },
         mesh::Mesh4::cube(),
