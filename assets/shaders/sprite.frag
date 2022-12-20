@@ -7,8 +7,8 @@ layout(std140, set = 0, binding = 0) uniform Sprite {
     vec4 tint;
 };
 
-layout(set = 1, binding = 0) uniform texture2D sprite_texture;
-layout(set = 1, binding = 1) uniform sampler sprite_sampler;
+layout(set = 0, binding = 1) uniform texture2D sprite_texture;
+layout(set = 0, binding = 2) uniform sampler sprite_sampler;
 
 layout(location = 0) in vec2 uv;
 
