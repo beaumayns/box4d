@@ -28,6 +28,16 @@ pub struct Mesh4 {
 }
 
 impl Mesh4 {
+    pub fn transformed(self, transform: &na::Affine4) -> Self {
+        Self {
+            vertices: self.vertices.iter().map(|x| *transform * *x).collect(),
+            normals: self.normals.iter().map(|x| transform.linear * *x).collect(),
+            colors: self.colors,
+            indices: self.indices,
+            num_tetrahedra: self.num_tetrahedra,
+        }
+    }
+
     pub fn cube() -> Self {
         #[rustfmt::skip]
         let vertices: Vec<na::Vector4> = vec![
@@ -63,9 +73,9 @@ impl Mesh4 {
         .collect();
 
         let colors: Vec<na::Vector4> = [
+            vec4(1.0, 0.8, 0.1, 1.0),
             vec4(0.0, 0.2, 0.3, 1.0),
             vec4(0.5, 0.0, 0.1, 1.0),
-            vec4(1.0, 0.8, 0.0, 1.0),
             vec4(0.3, 0.0, 0.4, 1.0),
         ]
         .iter()

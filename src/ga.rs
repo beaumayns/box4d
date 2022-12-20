@@ -47,6 +47,15 @@ impl Bivector4 {
     pub fn as_vector(&self) -> na::Vector6 {
         na::Vector6::from_column_slice(&self.c)
     }
+
+    pub fn dot(&self, v: &na::Vector4) -> na::Vector4 {
+        na::Vector4::new(
+            -self[0] * v[1] - self[1] * v[2] - self[2] * v[3],
+            self[0] * v[0] - self[3] * v[2] - self[4] * v[3],
+            self[1] * v[0] + self[3] * v[1] - self[5] * v[3],
+            self[2] * v[0] + self[4] * v[1] + self[5] * v[2],
+        )
+    }
 }
 
 impl Index<usize> for Bivector4 {

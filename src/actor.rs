@@ -1,4 +1,5 @@
 use crate::collision;
+use crate::constraints;
 use crate::draw_state;
 use crate::input;
 use crate::joint;
@@ -12,10 +13,7 @@ use crate::ga::Wedge;
 pub enum GrabState {
     Not,
     Miss,
-    Hit {
-        hit_entity: hecs::Entity,
-        joint_entity: hecs::Entity,
-    },
+    Hit(hecs::Entity),
 }
 
 pub struct Actor {
@@ -26,6 +24,7 @@ pub struct Actor {
 
 #[rustfmt::skip]
 pub fn update_actor(
+    constraints: &mut constraints::Constraints,
     world: &mut hecs::World,
     input_state: &input::InputState,
     actor_entity: hecs::Entity,
@@ -33,8 +32,6 @@ pub fn update_actor(
     // Handle movement in its own function, due to borrowing/mutability issues
     update_movement(world, input_state, actor_entity);
 
-    // Separate grab action determination from updating the world, due to
-    // borrow/mutability issues
     let current_grab_state = world.get::<&Actor>(actor_entity).unwrap().grab_state.clone();
     match (input_state.grab, current_grab_state) {
         (true, GrabState::Not) => {
@@ -45,16 +42,14 @@ pub fn update_actor(
             if let Some((hit_entity, t)) = collision::cast_ray(actor_position, forward, world) {
                 let world_space_hit = world.get::<&physics::RigidBody>(actor_entity).unwrap().get_transform() * (t * na::vec4(0.0, 0.0, 1.0, 0.0));
                 let world_to_local = world.get::<&physics::RigidBody>(hit_entity).unwrap().get_transform().inverse();
-                let joint_entity = world.spawn((joint::Joint::new(
-                    actor_entity,
+                constraints.add_joint(actor_entity, hit_entity, joint::Joint::new(
                     t * na::vec4(0.0, 0.0, 1.0, 0.0),
-                    hit_entity,
                     world_to_local * world_space_hit,
-                ),));
+                ));
 
                 world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|mut x| x.tint = na::vec4(0.0, 1.0, 0.0, 1.0)).ok();
                 world.query_one_mut::<&mut draw_state::DrawState>(hit_entity).map(|mut x| x.hollow = true).ok();
-                world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| { x.grab_state = GrabState::Hit { hit_entity, joint_entity } }).ok();
+                world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| { x.grab_state = GrabState::Hit(hit_entity) }).ok();
             } else {
                 world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|mut x| x.tint = na::vec4(1.0, 0.0, 0.0, 1.0)).ok();
                 world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| x.grab_state = GrabState::Miss).ok();
@@ -63,9 +58,9 @@ pub fn update_actor(
         (false, grab_state) => {
             world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|mut x| x.tint = na::vec4(0.0, 0.0, 0.0, 1.0)).ok();
             world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| x.grab_state = GrabState::Not).ok();
-            if let GrabState::Hit { hit_entity, joint_entity } = grab_state {
+            if let GrabState::Hit(hit_entity) = grab_state {
                 world.query_one_mut::<&mut draw_state::DrawState>(hit_entity).map(|mut x| x.hollow = false).ok();
-                world.despawn(joint_entity).ok();
+                constraints.remove_joint(actor_entity, hit_entity);
             }
         }
         _ => {}

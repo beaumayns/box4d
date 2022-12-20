@@ -4,11 +4,9 @@ use crate::physics;
 
 #[derive(Debug)]
 pub struct Joint {
-    pub a: hecs::Entity,
     pub a_anchor: na::Vector4,
     pub a_jacobian: na::Matrix4x6,
 
-    pub b: hecs::Entity,
     pub b_anchor: na::Vector4,
     pub b_jacobian: na::Matrix4x6,
 
@@ -18,18 +16,11 @@ pub struct Joint {
 }
 
 impl Joint {
-    pub fn new(
-        a: hecs::Entity,
-        a_anchor: na::Vector4,
-        b: hecs::Entity,
-        b_anchor: na::Vector4,
-    ) -> Self {
+    pub fn new(a_anchor: na::Vector4, b_anchor: na::Vector4) -> Self {
         Self {
-            a,
             a_anchor,
             a_jacobian: na::Matrix4x6::zeros(),
 
-            b,
             b_anchor,
             b_jacobian: na::Matrix4x6::zeros(),
 

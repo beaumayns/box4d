@@ -1,5 +1,5 @@
+use crate::constraints;
 use crate::ga;
-use crate::joint;
 use crate::na;
 
 #[derive(Debug, Copy, Clone)]
@@ -11,6 +11,8 @@ pub struct RigidBody {
     pub inverse_mass: f32,
     pub inertia_tensor: f32,
     pub inverse_inertia_tensor: f32,
+
+    pub gravity: f32,
 
     pub velocity: na::Vector4,
     pub force: na::Vector4,
@@ -35,6 +37,8 @@ impl Default for RigidBody {
             // the moments of the object relative to each of the basis bivectors.
             inertia_tensor: 1.0,
             inverse_inertia_tensor: 1.0,
+
+            gravity: 1.0,
 
             velocity: na::Vector4::zeros(),
             force: na::Vector4::zeros(),
@@ -63,10 +67,12 @@ impl RigidBody {
     }
 }
 
-pub fn apply_physics(dt: f32, world: &mut hecs::World) {
+pub fn apply_physics(dt: f32, constraints: &mut constraints::Constraints, world: &mut hecs::World) {
+    const GRAVITY: na::Vector4 = na::Vector4::new(0.0, -10.0, 0.0, 0.0);
+
     for (_, body) in world.query_mut::<&mut RigidBody>() {
         body.velocity *= body.linear_damping;
-        body.velocity += dt * body.force / body.mass;
+        body.velocity += dt * (GRAVITY * body.gravity + body.force / body.mass);
         body.force = na::Vector4::zeros();
 
         body.angular_velocity *= body.angular_damping;
@@ -74,20 +80,9 @@ pub fn apply_physics(dt: f32, world: &mut hecs::World) {
         body.torque = ga::Bivector4::zero();
     }
 
-    {
-        let mut joint_query = world.query::<&mut joint::Joint>();
-        let mut body_query = world.query::<&mut RigidBody>();
-
-        for (_, joint) in joint_query.iter() {
-            let [a_body, b_body] = body_query.view().get_mut_n([joint.a, joint.b]);
-            joint.prepare(dt, a_body.unwrap(), b_body.unwrap());
-        }
-        for _ in 0..4 {
-            for (_, joint) in joint_query.iter() {
-                let [a_body, b_body] = body_query.view().get_mut_n([joint.a, joint.b]);
-                joint.apply(a_body.unwrap(), b_body.unwrap());
-            }
-        }
+    constraints.prepare(dt, world);
+    for _ in 0..4 {
+        constraints.apply(world);
     }
 
     for (_, body) in world.query_mut::<&mut RigidBody>() {
