@@ -1,5 +1,5 @@
 use crate::na;
-use std::ops::{Add, AddAssign, Div, DivAssign, Index, Mul, MulAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Index, Mul, MulAssign, Sub, SubAssign};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Bivector4 {
@@ -19,6 +19,33 @@ impl Bivector4 {
 
     pub fn norm_squared(&self) -> f32 {
         self.c.iter().map(|&x| x * x).sum()
+    }
+
+    // If v represents the point on the surface of a rotating object, then this
+    // function will return a matrix which, when used to multiply from the left
+    // a vector representing the coefficients of a bivector, will calculate the dot
+    // product of that bivector and v. The result of this will be a vector
+    // representing the linear velocity at point v.
+    // In other words, this is a jacobian matrix - it converts from world-space
+    // rotational velocity to linear velocity at point v.
+    #[rustfmt::skip]
+    pub fn dot_vector_matrix(v: na::Vector4) -> na::Matrix4x6 {
+        na::Matrix4x6::new(
+            -v[1], -v[2], -v[3],   0.0,   0.0,   0.0,
+             v[0],   0.0,   0.0, -v[2], -v[3],   0.0,
+              0.0,  v[0],   0.0,  v[1],   0.0, -v[3],
+              0.0,   0.0,  v[0],   0.0,  v[1],  v[2],
+        )
+    }
+
+    pub fn from_vector(v: na::Vector6) -> Self {
+        Self {
+            c: v.as_slice().try_into().unwrap(),
+        }
+    }
+
+    pub fn as_vector(&self) -> na::Vector6 {
+        na::Vector6::from_column_slice(&self.c)
     }
 }
 
@@ -44,6 +71,24 @@ impl AddAssign<Bivector4> for Bivector4 {
     fn add_assign(&mut self, rhs: Bivector4) {
         for (i, v) in &mut self.c.iter_mut().enumerate() {
             *v += rhs[i];
+        }
+    }
+}
+
+impl Sub<Bivector4> for Bivector4 {
+    type Output = Self;
+
+    fn sub(self, rhs: Bivector4) -> Self {
+        let mut r = self;
+        r -= rhs;
+        r
+    }
+}
+
+impl SubAssign<Bivector4> for Bivector4 {
+    fn sub_assign(&mut self, rhs: Bivector4) {
+        for (i, v) in &mut self.c.iter_mut().enumerate() {
+            *v -= rhs[i];
         }
     }
 }

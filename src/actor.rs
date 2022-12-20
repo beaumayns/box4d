@@ -1,16 +1,21 @@
 use crate::collision;
 use crate::draw_state;
 use crate::input;
+use crate::joint;
 use crate::na;
 use crate::physics;
 use crate::sprite_renderer;
 
 use crate::ga::Wedge;
 
+#[derive(Clone)]
 pub enum GrabState {
     Not,
     Miss,
-    Hit(hecs::Entity),
+    Hit {
+        hit_entity: hecs::Entity,
+        joint_entity: hecs::Entity,
+    },
 }
 
 pub struct Actor {
@@ -19,7 +24,55 @@ pub struct Actor {
     pub look_torque: f32,
 }
 
+#[rustfmt::skip]
 pub fn update_actor(
+    world: &mut hecs::World,
+    input_state: &input::InputState,
+    actor_entity: hecs::Entity,
+) {
+    // Handle movement in its own function, due to borrowing/mutability issues
+    update_movement(world, input_state, actor_entity);
+
+    // Separate grab action determination from updating the world, due to
+    // borrow/mutability issues
+    let current_grab_state = world.get::<&Actor>(actor_entity).unwrap().grab_state.clone();
+    match (input_state.grab, current_grab_state) {
+        (true, GrabState::Not) => {
+            let (actor_position, forward) = world
+                .get::<&physics::RigidBody>(actor_entity)
+                .map(|x| (x.position, x.orientation.to_matrix().column(2).normalize()))
+                .unwrap();
+            if let Some((hit_entity, t)) = collision::cast_ray(actor_position, forward, world) {
+                let world_space_hit = world.get::<&physics::RigidBody>(actor_entity).unwrap().get_transform() * (t * na::vec4(0.0, 0.0, 1.0, 0.0));
+                let world_to_local = world.get::<&physics::RigidBody>(hit_entity).unwrap().get_transform().inverse();
+                let joint_entity = world.spawn((joint::Joint::new(
+                    actor_entity,
+                    t * na::vec4(0.0, 0.0, 1.0, 0.0),
+                    hit_entity,
+                    world_to_local * world_space_hit,
+                ),));
+
+                world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|mut x| x.tint = na::vec4(0.0, 1.0, 0.0, 1.0)).ok();
+                world.query_one_mut::<&mut draw_state::DrawState>(hit_entity).map(|mut x| x.hollow = true).ok();
+                world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| { x.grab_state = GrabState::Hit { hit_entity, joint_entity } }).ok();
+            } else {
+                world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|mut x| x.tint = na::vec4(1.0, 0.0, 0.0, 1.0)).ok();
+                world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| x.grab_state = GrabState::Miss).ok();
+            }
+        }
+        (false, grab_state) => {
+            world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|mut x| x.tint = na::vec4(0.0, 0.0, 0.0, 1.0)).ok();
+            world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| x.grab_state = GrabState::Not).ok();
+            if let GrabState::Hit { hit_entity, joint_entity } = grab_state {
+                world.query_one_mut::<&mut draw_state::DrawState>(hit_entity).map(|mut x| x.hollow = false).ok();
+                world.despawn(joint_entity).ok();
+            }
+        }
+        _ => {}
+    }
+}
+
+fn update_movement(
     world: &mut hecs::World,
     input_state: &input::InputState,
     actor_entity: hecs::Entity,
@@ -72,41 +125,5 @@ pub fn update_actor(
     }
     if input_state.roll_right {
         body.torque += -3.0 * actor.look_torque * roll_plane;
-    }
-
-    match (input_state.grab, &actor.grab_state) {
-        (true, GrabState::Not) => {
-            if let Some((hit_entity, _)) = collision::cast_ray(body.position, forward, world) {
-                actor.grab_state = GrabState::Hit(hit_entity);
-                world
-                    .get::<&mut sprite_renderer::Sprite>(actor_entity)
-                    .map(|mut x| x.tint = na::vec4(0.0, 1.0, 0.0, 1.0))
-                    .ok();
-                world
-                    .get::<&mut draw_state::DrawState>(hit_entity)
-                    .map(|mut x| x.hollow = true)
-                    .ok();
-            } else {
-                actor.grab_state = GrabState::Miss;
-                world
-                    .get::<&mut sprite_renderer::Sprite>(actor_entity)
-                    .map(|mut x| x.tint = na::vec4(1.0, 0.0, 0.0, 1.0))
-                    .ok();
-            }
-        }
-        (false, grab_state) => {
-            world
-                .get::<&mut sprite_renderer::Sprite>(actor_entity)
-                .map(|mut x| x.tint = na::vec4(0.0, 0.0, 0.0, 1.0))
-                .ok();
-            if let GrabState::Hit(hit_entity) = grab_state {
-                world
-                    .get::<&mut draw_state::DrawState>(*hit_entity)
-                    .map(|mut x| x.hollow = false)
-                    .ok();
-            }
-            actor.grab_state = GrabState::Not;
-        }
-        _ => {}
     }
 }
