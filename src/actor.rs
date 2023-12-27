@@ -47,19 +47,19 @@ pub fn update_actor(
                     world_to_local * world_space_hit,
                 ));
 
-                world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|mut x| x.tint = na::vec4(0.0, 1.0, 0.0, 1.0)).ok();
-                world.query_one_mut::<&mut draw_state::DrawState>(hit_entity).map(|mut x| x.hollow = true).ok();
-                world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| { x.grab_state = GrabState::Hit(hit_entity) }).ok();
+                world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|x| x.tint = na::vec4(0.0, 1.0, 0.0, 1.0)).ok();
+                world.query_one_mut::<&mut draw_state::DrawState>(hit_entity).map(|x| x.hollow = true).ok();
+                world.query_one_mut::<&mut Actor>(actor_entity).map(|x| { x.grab_state = GrabState::Hit(hit_entity) }).ok();
             } else {
-                world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|mut x| x.tint = na::vec4(1.0, 0.0, 0.0, 1.0)).ok();
-                world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| x.grab_state = GrabState::Miss).ok();
+                world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|x| x.tint = na::vec4(1.0, 0.0, 0.0, 1.0)).ok();
+                world.query_one_mut::<&mut Actor>(actor_entity).map(|x| x.grab_state = GrabState::Miss).ok();
             }
         }
         (false, grab_state) => {
-            world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|mut x| x.tint = na::vec4(0.0, 0.0, 0.0, 1.0)).ok();
-            world.query_one_mut::<&mut Actor>(actor_entity).map(|mut x| x.grab_state = GrabState::Not).ok();
+            world.query_one_mut::<&mut sprite_renderer::Sprite>(actor_entity).map(|x| x.tint = na::vec4(0.0, 0.0, 0.0, 1.0)).ok();
+            world.query_one_mut::<&mut Actor>(actor_entity).map(|x| x.grab_state = GrabState::Not).ok();
             if let GrabState::Hit(hit_entity) = grab_state {
-                world.query_one_mut::<&mut draw_state::DrawState>(hit_entity).map(|mut x| x.hollow = false).ok();
+                world.query_one_mut::<&mut draw_state::DrawState>(hit_entity).map(|x| x.hollow = false).ok();
                 constraints.remove_joint(actor_entity, hit_entity);
             }
         }

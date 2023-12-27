@@ -97,10 +97,10 @@ pub fn do_collisions(constraints: &mut constraints::Constraints, world: &mut hec
             (None, None) => {}
             (None, Some(contact_point)) => {
                 constraints.add_arbiter(a, b, contact::Arbiter::new(contact_point, a_body, b_body));
-                if let Some(mut state) = draw_state_query.view().get_mut(a) {
+                if let Some(state) = draw_state_query.view().get_mut(a) {
                     state.contacts += 1;
                 }
-                if let Some(mut state) = draw_state_query.view().get_mut(b) {
+                if let Some(state) = draw_state_query.view().get_mut(b) {
                     state.contacts += 1;
                 }
             }
@@ -109,14 +109,14 @@ pub fn do_collisions(constraints: &mut constraints::Constraints, world: &mut hec
             }
             (Some(_), None) => {
                 constraints.remove_arbiter(a, b);
-                draw_state_query
+                let _ = draw_state_query
                     .view()
                     .get_mut(a)
-                    .map_or((), |mut state| state.contacts -= 1);
-                draw_state_query
+                    .map(|state| state.contacts -= 1);
+                let _ = draw_state_query
                     .view()
                     .get_mut(b)
-                    .map_or((), |mut state| state.contacts -= 1);
+                    .map(|state| state.contacts -= 1);
             }
         }
     }
